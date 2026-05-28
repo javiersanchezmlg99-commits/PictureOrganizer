@@ -1,11 +1,25 @@
 import { ipcMain, dialog } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import * as db from './database';
-import type { IdentificationResult } from './shared/types';
+import type { IdentificationResult, PhotoFilter } from './shared/types';
 import { v4 as uuidv4 } from 'uuid';
 
+const MOCK_SPECIES = [
+  { name: 'Lynx pardinus', scientific: 'Lynx pardinus', category: 'Mammal' },
+  { name: 'Aquila chrysaetos', scientific: 'Aquila chrysaetos', category: 'Bird' },
+  { name: 'Vulpes vulpes', scientific: 'Vulpes vulpes', category: 'Mammal' },
+  { name: 'Bubo bubo', scientific: 'Bubo bubo', category: 'Bird' },
+  { name: 'Capra pyrenaica', scientific: 'Capra pyrenaica', category: 'Mammal' },
+  { name: 'Lutra lutra', scientific: 'Lutra lutra', category: 'Mammal' },
+  { name: 'Testudo graeca', scientific: 'Testudo graeca', category: 'Reptile' },
+  { name: 'Salamandra salamandra', scientific: 'Salamandra salamandra', category: 'Amphibian' },
+  { name: 'Cervus elaphus', scientific: 'Cervus elaphus', category: 'Mammal' },
+  { name: 'Gypaetus barbatus', scientific: 'Gypaetus barbatus', category: 'Bird' },
+];
+
 export function registerIpcHandlers(): void {
-  ipcMain.handle('photos:getAll', () => db.getAllPhotos());
+  ipcMain.handle('photos:getAll', (_event, filter?: PhotoFilter) => db.getAllPhotos(filter));
 
   ipcMain.handle('photos:getOne', (_event, id: string) => db.getPhotoById(id));
 
@@ -14,6 +28,22 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('photos:stats', () => db.getStats());
+  ipcMain.handle('photos:topSpecies', (_event, limit?: number) => db.getTopSpecies(limit));
+  ipcMain.handle('photos:timeline', () => db.getTimeline());
+  ipcMain.handle('photos:categoryDistribution', () => db.getCategoryDistribution());
+
+  ipcMain.handle('photos:exportCsv', async () => {
+    const csv = db.exportToCsv();
+    const result = await dialog.showSaveDialog({
+      defaultPath: `fauna-export-${new Date().toISOString().slice(0, 10)}.csv`,
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, csv, 'utf-8');
+      return result.filePath;
+    }
+    return '';
+  });
 
   ipcMain.handle('dialog:selectFiles', async () => {
     const result = await dialog.showOpenDialog({
@@ -25,18 +55,21 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('photos:identify', (_event, filePath: string) => {
     const filename = path.basename(filePath);
+    const species = MOCK_SPECIES[Math.floor(Math.random() * MOCK_SPECIES.length)];
+    const confidence = 0.75 + Math.random() * 0.24;
+
     const mockResult: IdentificationResult = {
       id: uuidv4(),
       filename,
-      species_name: 'Lynx pardinus',
-      scientific_name: 'Lynx pardinus',
-      confidence: 0.85 + Math.random() * 0.14,
-      category: 'Mammal',
+      species_name: species.name,
+      scientific_name: species.scientific,
+      confidence,
+      category: species.category,
       inference_time_ms: 150 + Math.floor(Math.random() * 200),
       all_predictions: [
-        { class: 'Lynx pardinus', confidence: 0.85 + Math.random() * 0.14 },
-        { class: 'Felis silvestris', confidence: 0.02 + Math.random() * 0.05 },
-        { class: 'Vulpes vulpes', confidence: 0.01 + Math.random() * 0.02 },
+        { class: species.name, confidence },
+        { class: MOCK_SPECIES[(Math.floor(Math.random() * MOCK_SPECIES.length))].name, confidence: 0.02 + Math.random() * 0.05 },
+        { class: MOCK_SPECIES[(Math.floor(Math.random() * MOCK_SPECIES.length))].name, confidence: 0.01 + Math.random() * 0.02 },
       ],
     };
 
