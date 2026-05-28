@@ -2,7 +2,7 @@ import type { Screen } from '../App';
 
 const NAV_ITEMS: Array<{ key: Screen; label: string; icon: string }> = [
   { key: 'upload', label: 'Upload', icon: '📷' },
-  { key: 'history', label: 'History', icon: '📋' },
+  { key: 'identifications', label: 'Identifications', icon: '🔬' },
   { key: 'dashboard', label: 'Dashboard', icon: '📊' },
 ];
 
@@ -40,8 +40,8 @@ export default function Sidebar({ current, onNavigate }: SidebarProps) {
 
       <div className="p-4 border-t border-gray-700">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-yellow-400" />
-          <span className="text-xs text-gray-400">Demo Mode</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span className="text-xs text-gray-400">MegaDetector + iNat21</span>
         </div>
       </div>
     </aside>

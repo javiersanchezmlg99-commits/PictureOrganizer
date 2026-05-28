@@ -4,6 +4,8 @@ import type { PhotoFilter } from './shared/types';
 contextBridge.exposeInMainWorld('electronAPI', {
   getPhotos: (filter?: PhotoFilter) => ipcRenderer.invoke('photos:getAll', filter),
   getPhoto: (id: string) => ipcRenderer.invoke('photos:getOne', id),
+  photoExists: (filePath: string) => ipcRenderer.invoke('photos:exists', filePath),
+  getDistinctSpecies: () => ipcRenderer.invoke('photos:distinctSpecies'),
   deletePhoto: (id: string) => ipcRenderer.invoke('photos:delete', id),
   selectFiles: () => ipcRenderer.invoke('dialog:selectFiles'),
   identifyPhoto: (filePath: string) => ipcRenderer.invoke('photos:identify', filePath),

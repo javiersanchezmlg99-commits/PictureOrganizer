@@ -86,6 +86,10 @@ export function getAllPhotos(filter?: PhotoFilter): Photo[] {
     conditions.push('category = ?');
     params.push(filter.category);
   }
+  if (filter?.species) {
+    conditions.push('species_name = ?');
+    params.push(filter.species);
+  }
   if (filter?.minConfidence !== undefined) {
     conditions.push('confidence >= ?');
     params.push(filter.minConfidence);
@@ -105,6 +109,20 @@ export function getAllPhotos(filter?: PhotoFilter): Photo[] {
 
 export function getPhotoById(id: string): Photo | null {
   return queryOne<Photo>('SELECT * FROM photos WHERE id = ?', [id]);
+}
+
+export function photoExistsByPath(filePath: string): boolean {
+  const row = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM photos WHERE file_path = ?', [filePath]);
+  return (row?.count ?? 0) > 0;
+}
+
+export function getDistinctSpecies(): string[] {
+  const rows = queryAll<{ species_name: string }>(
+    `SELECT DISTINCT species_name FROM photos
+     WHERE species_name IS NOT NULL AND species_name != 'Empty' AND species_name != 'animal'
+     ORDER BY species_name ASC`
+  );
+  return rows.map(r => r.species_name);
 }
 
 export function insertPhoto(data: {

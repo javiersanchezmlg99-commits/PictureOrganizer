@@ -27,6 +27,7 @@ export interface IdentificationResult {
   category: string;
   inference_time_ms: number;
   all_predictions: Array<{ class: string; confidence: number }>;
+  duplicate?: boolean;
 }
 
 export interface StatsData {
@@ -54,6 +55,7 @@ export interface CategoryCount {
 export interface PhotoFilter {
   search?: string;
   category?: string;
+  species?: string;
   minConfidence?: number;
   dateFrom?: string;
   dateTo?: string;
@@ -62,6 +64,8 @@ export interface PhotoFilter {
 export interface ElectronAPI {
   getPhotos: (filter?: PhotoFilter) => Promise<Photo[]>;
   getPhoto: (id: string) => Promise<Photo | null>;
+  photoExists: (filePath: string) => Promise<boolean>;
+  getDistinctSpecies: () => Promise<string[]>;
   deletePhoto: (id: string) => Promise<void>;
   selectFiles: () => Promise<string[]>;
   identifyPhoto: (filePath: string) => Promise<IdentificationResult>;

@@ -7,27 +7,11 @@ import { loadModels, identifyImage } from './inference';
 import type { IdentificationResult, PhotoFilter } from './shared/types';
 import { v4 as uuidv4 } from 'uuid';
 
-/**
- * Map MegaDetector label to a broad category.
- * When iNat species is available, infer category from taxonomy.
- */
-function resolveCategory(mdLabel: string, speciesName: string | null): string {
-  if (!speciesName || speciesName === mdLabel) {
-    // No species — use MegaDetector class directly
-    switch (mdLabel) {
-      case 'animal':  return 'Animal';
-      case 'person':  return 'Person';
-      case 'vehicle': return 'Vehicle';
-      default:        return 'Unknown';
-    }
-  }
-  // Species identified — category is "Animal" (iNat only classifies animals/plants/fungi)
-  return 'Animal';
-}
-
 export function registerIpcHandlers(): void {
   ipcMain.handle('photos:getAll', (_event, filter?: PhotoFilter) => db.getAllPhotos(filter));
   ipcMain.handle('photos:getOne', (_event, id: string) => db.getPhotoById(id));
+  ipcMain.handle('photos:exists', (_event, filePath: string) => db.photoExistsByPath(filePath));
+  ipcMain.handle('photos:distinctSpecies', () => db.getDistinctSpecies());
 
   ipcMain.handle('photos:delete', (_event, id: string) => {
     deleteThumbnail(id);
@@ -70,31 +54,32 @@ export function registerIpcHandlers(): void {
     const filename = path.basename(filePath);
     const id = uuidv4();
 
+    // Duplicate check
+    if (db.photoExistsByPath(filePath)) {
+      return { id: '', filename, duplicate: true } as IdentificationResult & { duplicate: boolean };
+    }
+
     try {
       await loadModels();
 
       const { detections, species, topSpecies, inferenceTimeMs } =
         await identifyImage(filePath);
 
-      // Best animal detection
       const animals = detections.filter(d => d.classId === 0);
       const bestAnimal = animals.length > 0
         ? animals.reduce((a, b) => (a.confidence > b.confidence ? a : b))
         : null;
 
-      // Build result: species from iNat if available, otherwise MegaDetector class
-      const speciesName = species?.name ?? (bestAnimal?.label ?? 'Empty');
-      const scientificName = species?.name ?? speciesName;
+      // Use species name as category when available
+      const speciesName = species?.name ?? (bestAnimal ? 'animal' : 'Empty');
       const confidence = species?.confidence ?? (bestAnimal?.confidence ?? 0);
-      const category = bestAnimal
-        ? resolveCategory(bestAnimal.label, species?.name ?? null)
-        : 'Empty';
+      const category = species?.name ?? (bestAnimal?.label ?? 'Empty');
 
       const result: IdentificationResult = {
         id,
         filename,
         species_name: speciesName,
-        scientific_name: scientificName,
+        scientific_name: speciesName,
         confidence,
         category,
         inference_time_ms: inferenceTimeMs,
