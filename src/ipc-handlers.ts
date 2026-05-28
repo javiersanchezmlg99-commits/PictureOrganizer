@@ -3,25 +3,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as db from './database';
 import { generateThumbnail, deleteThumbnail, getThumbPath } from './thumbnails';
+import { loadModels, identifyImage } from './inference';
 import type { IdentificationResult, PhotoFilter } from './shared/types';
 import { v4 as uuidv4 } from 'uuid';
 
-const MOCK_SPECIES = [
-  { name: 'Lynx pardinus', scientific: 'Lynx pardinus', category: 'Mammal' },
-  { name: 'Aquila chrysaetos', scientific: 'Aquila chrysaetos', category: 'Bird' },
-  { name: 'Vulpes vulpes', scientific: 'Vulpes vulpes', category: 'Mammal' },
-  { name: 'Bubo bubo', scientific: 'Bubo bubo', category: 'Bird' },
-  { name: 'Capra pyrenaica', scientific: 'Capra pyrenaica', category: 'Mammal' },
-  { name: 'Lutra lutra', scientific: 'Lutra lutra', category: 'Mammal' },
-  { name: 'Testudo graeca', scientific: 'Testudo graeca', category: 'Reptile' },
-  { name: 'Salamandra salamandra', scientific: 'Salamandra salamandra', category: 'Amphibian' },
-  { name: 'Cervus elaphus', scientific: 'Cervus elaphus', category: 'Mammal' },
-  { name: 'Gypaetus barbatus', scientific: 'Gypaetus barbatus', category: 'Bird' },
-];
+/**
+ * Map MegaDetector label to a broad category.
+ * When iNat species is available, infer category from taxonomy.
+ */
+function resolveCategory(mdLabel: string, speciesName: string | null): string {
+  if (!speciesName || speciesName === mdLabel) {
+    // No species — use MegaDetector class directly
+    switch (mdLabel) {
+      case 'animal':  return 'Animal';
+      case 'person':  return 'Person';
+      case 'vehicle': return 'Vehicle';
+      default:        return 'Unknown';
+    }
+  }
+  // Species identified — category is "Animal" (iNat only classifies animals/plants/fungi)
+  return 'Animal';
+}
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('photos:getAll', (_event, filter?: PhotoFilter) => db.getAllPhotos(filter));
-
   ipcMain.handle('photos:getOne', (_event, id: string) => db.getPhotoById(id));
 
   ipcMain.handle('photos:delete', (_event, id: string) => {
@@ -34,7 +39,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('photos:timeline', () => db.getTimeline());
   ipcMain.handle('photos:categoryDistribution', () => db.getCategoryDistribution());
 
-  // Get thumbnail path for a photo (returns cached thumb or original path)
   ipcMain.handle('photos:thumbnail', (_event, photoId: string, originalPath: string) => {
     return getThumbPath(photoId) ?? originalPath;
   });
@@ -60,45 +64,69 @@ export function registerIpcHandlers(): void {
     return result.filePaths;
   });
 
-  ipcMain.handle('photos:identify', (_event, filePath: string) => {
+  // ── Two-stage identification pipeline ──────────────────────────────
+
+  ipcMain.handle('photos:identify', async (_event, filePath: string) => {
     const filename = path.basename(filePath);
-    const species = MOCK_SPECIES[Math.floor(Math.random() * MOCK_SPECIES.length)];
-    const confidence = 0.75 + Math.random() * 0.24;
     const id = uuidv4();
 
-    const mockResult: IdentificationResult = {
-      id,
-      filename,
-      species_name: species.name,
-      scientific_name: species.scientific,
-      confidence,
-      category: species.category,
-      inference_time_ms: 150 + Math.floor(Math.random() * 200),
-      all_predictions: [
-        { class: species.name, confidence },
-        { class: MOCK_SPECIES[(Math.floor(Math.random() * MOCK_SPECIES.length))].name, confidence: 0.02 + Math.random() * 0.05 },
-        { class: MOCK_SPECIES[(Math.floor(Math.random() * MOCK_SPECIES.length))].name, confidence: 0.01 + Math.random() * 0.02 },
-      ],
-    };
-
-    db.insertPhoto({
-      filename,
-      file_path: filePath,
-      species_name: mockResult.species_name,
-      scientific_name: mockResult.scientific_name,
-      confidence: mockResult.confidence,
-      category: mockResult.category,
-      inference_time_ms: mockResult.inference_time_ms,
-      all_predictions: mockResult.all_predictions,
-    });
-
-    // Generate thumbnail in background (non-blocking for UI)
     try {
-      generateThumbnail(id, filePath);
-    } catch (err) {
-      console.warn('[identify] Thumbnail generation failed:', err);
-    }
+      await loadModels();
 
-    return mockResult;
+      const { detections, species, topSpecies, inferenceTimeMs } =
+        await identifyImage(filePath);
+
+      // Best animal detection
+      const animals = detections.filter(d => d.classId === 0);
+      const bestAnimal = animals.length > 0
+        ? animals.reduce((a, b) => (a.confidence > b.confidence ? a : b))
+        : null;
+
+      // Build result: species from iNat if available, otherwise MegaDetector class
+      const speciesName = species?.name ?? (bestAnimal?.label ?? 'Empty');
+      const scientificName = species?.name ?? speciesName;
+      const confidence = species?.confidence ?? (bestAnimal?.confidence ?? 0);
+      const category = bestAnimal
+        ? resolveCategory(bestAnimal.label, species?.name ?? null)
+        : 'Empty';
+
+      const result: IdentificationResult = {
+        id,
+        filename,
+        species_name: speciesName,
+        scientific_name: scientificName,
+        confidence,
+        category,
+        inference_time_ms: inferenceTimeMs,
+        all_predictions: topSpecies.length > 0
+          ? topSpecies.map(s => ({ class: s.name, confidence: s.confidence }))
+          : detections.map(d => ({
+              class: `${d.label} [${d.bbox.map(v => v.toFixed(0)).join(',')}]`,
+              confidence: d.confidence,
+            })),
+      };
+
+      db.insertPhoto({
+        filename,
+        file_path: filePath,
+        species_name: result.species_name,
+        scientific_name: result.scientific_name,
+        confidence: result.confidence,
+        category: result.category,
+        inference_time_ms: result.inference_time_ms,
+        all_predictions: result.all_predictions,
+      });
+
+      try {
+        generateThumbnail(id, filePath);
+      } catch (err) {
+        console.warn('[identify] Thumbnail generation failed:', err);
+      }
+
+      return result;
+    } catch (err) {
+      console.error('[identify] Inference failed:', err);
+      throw new Error(`Identification failed: ${(err as Error).message}`);
+    }
   });
 }

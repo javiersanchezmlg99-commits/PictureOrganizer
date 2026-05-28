@@ -96,5 +96,6 @@ out/
 *.db-wal
 *.db-shm
 
-# ONNX models (large binary files)
-models/*.onnx
+# AI models (large binary files — download locally)
+models/*
+!models/.gitkeep
