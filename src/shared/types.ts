@@ -36,11 +36,38 @@ export interface StatsData {
   photos_today: number;
 }
 
+export interface SpeciesCount {
+  species_name: string;
+  count: number;
+}
+
+export interface TimelineEntry {
+  month: string;
+  count: number;
+}
+
+export interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+export interface PhotoFilter {
+  search?: string;
+  category?: string;
+  minConfidence?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export interface ElectronAPI {
-  getPhotos: () => Promise<Photo[]>;
+  getPhotos: (filter?: PhotoFilter) => Promise<Photo[]>;
   getPhoto: (id: string) => Promise<Photo | null>;
   deletePhoto: (id: string) => Promise<void>;
   selectFiles: () => Promise<string[]>;
   identifyPhoto: (filePath: string) => Promise<IdentificationResult>;
   getStats: () => Promise<StatsData>;
+  getTopSpecies: (limit?: number) => Promise<SpeciesCount[]>;
+  getTimeline: () => Promise<TimelineEntry[]>;
+  getCategoryDistribution: () => Promise<CategoryCount[]>;
+  exportCsv: () => Promise<string>;
 }

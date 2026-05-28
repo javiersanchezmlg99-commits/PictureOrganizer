@@ -45,6 +45,17 @@ export function startApiServer(port = 3001): void {
     res.json(db.getTimeline());
   });
 
+  app.get('/api/categories', (_req, res) => {
+    res.json(db.getCategoryDistribution());
+  });
+
+  app.get('/api/export/csv', (_req, res) => {
+    const csv = db.exportToCsv();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="fauna-export-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  });
+
   app.listen(port, '127.0.0.1', () => {
     console.log(`FAUNA ID API running on http://127.0.0.1:${port}`);
   });

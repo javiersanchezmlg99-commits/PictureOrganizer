@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { app } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import type { Photo, StatsData } from './shared/types';
+import type { Photo, StatsData, PhotoFilter } from './shared/types';
 
 let db: SqlJsDatabase;
 let dbPath: string;
@@ -73,8 +73,34 @@ function queryOne<T>(sql: string, params: unknown[] = []): T | null {
   return results[0] ?? null;
 }
 
-export function getAllPhotos(): Photo[] {
-  return queryAll<Photo>('SELECT * FROM photos ORDER BY created_at DESC');
+export function getAllPhotos(filter?: PhotoFilter): Photo[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filter?.search) {
+    conditions.push('(species_name LIKE ? OR scientific_name LIKE ? OR filename LIKE ?)');
+    const like = `%${filter.search}%`;
+    params.push(like, like, like);
+  }
+  if (filter?.category) {
+    conditions.push('category = ?');
+    params.push(filter.category);
+  }
+  if (filter?.minConfidence !== undefined) {
+    conditions.push('confidence >= ?');
+    params.push(filter.minConfidence);
+  }
+  if (filter?.dateFrom) {
+    conditions.push('date(created_at) >= date(?)');
+    params.push(filter.dateFrom);
+  }
+  if (filter?.dateTo) {
+    conditions.push('date(created_at) <= date(?)');
+    params.push(filter.dateTo);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return queryAll<Photo>(`SELECT * FROM photos ${where} ORDER BY created_at DESC`, params);
 }
 
 export function getPhotoById(id: string): Photo | null {
@@ -152,4 +178,22 @@ export function getTimeline(): Array<{ month: string; count: number }> {
     `SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
      FROM photos GROUP BY month ORDER BY month ASC`
   );
+}
+
+export function getCategoryDistribution(): Array<{ category: string; count: number }> {
+  return queryAll<{ category: string; count: number }>(
+    `SELECT COALESCE(category, 'Unknown') as category, COUNT(*) as count
+     FROM photos GROUP BY category ORDER BY count DESC`
+  );
+}
+
+export function exportToCsv(): string {
+  const photos = getAllPhotos();
+  const headers = 'id,filename,species_name,scientific_name,confidence,category,inference_time_ms,created_at';
+  const rows = photos.map((p) =>
+    [p.id, p.filename, p.species_name ?? '', p.scientific_name ?? '', p.confidence, p.category ?? '', p.inference_time_ms ?? '', p.created_at]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .join(',')
+  );
+  return [headers, ...rows].join('\n');
 }
