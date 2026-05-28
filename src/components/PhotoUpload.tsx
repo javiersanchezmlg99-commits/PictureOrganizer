@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { IdentificationResult } from '../shared/types';
 import { localFileUrl } from '../shared/utils';
+import { useI18n } from '../shared/i18n';
 
 interface FileEntry {
   path: string;
@@ -8,11 +9,12 @@ interface FileEntry {
 }
 
 export default function PhotoUpload() {
+  const { t, commonName } = useI18n();
   const [dragOver, setDragOver] = useState(false);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [processing, setProcessing] = useState(false);
   const [currentFile, setCurrentFile] = useState('');
-  const [results, setResults] = useState<(IdentificationResult & { duplicate?: boolean })[]>([]);
+  const [results, setResults] = useState<IdentificationResult[]>([]);
 
   const checkDuplicates = async (paths: string[]): Promise<FileEntry[]> => {
     const entries: FileEntry[] = [];
@@ -52,13 +54,8 @@ export default function PhotoUpload() {
     }
   };
 
-  const removeDuplicates = () => {
-    setFiles(files.filter(f => !f.duplicate));
-  };
-
-  const removeFile = (path: string) => {
-    setFiles(files.filter(f => f.path !== path));
-  };
+  const removeDuplicates = () => setFiles(files.filter(f => !f.duplicate));
+  const removeFile = (path: string) => setFiles(files.filter(f => f.path !== path));
 
   const handleIdentify = async () => {
     const validFiles = files.filter(f => !f.duplicate);
@@ -81,7 +78,7 @@ export default function PhotoUpload() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <h2 className="text-2xl font-bold">Upload Photos</h2>
+      <h2 className="text-2xl font-bold">{t('upload.title')}</h2>
 
       <div
         onDragOver={handleDragOver}
@@ -95,8 +92,8 @@ export default function PhotoUpload() {
         onClick={handleBrowse}
       >
         <div className="text-5xl mb-4">📁</div>
-        <p className="text-lg text-gray-300">Drag & drop photos here</p>
-        <p className="text-sm text-gray-500 mt-2">or click to browse — JPG, PNG, WebP</p>
+        <p className="text-lg text-gray-300">{t('upload.dragDrop')}</p>
+        <p className="text-sm text-gray-500 mt-2">{t('upload.browse')}</p>
       </div>
 
       {files.length > 0 && (
@@ -104,18 +101,18 @@ export default function PhotoUpload() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <p className="text-sm text-gray-400">
-                {validCount} new file{validCount !== 1 ? 's' : ''}
+                {validCount} {validCount !== 1 ? t('upload.newFilesPlural') : t('upload.newFiles')}
               </p>
               {duplicateCount > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-amber-400">
-                    {duplicateCount} duplicate{duplicateCount !== 1 ? 's' : ''}
+                    {duplicateCount} {duplicateCount !== 1 ? t('upload.duplicatesPlural') : t('upload.duplicates')}
                   </span>
                   <button
                     onClick={removeDuplicates}
                     className="text-xs text-amber-400 hover:text-amber-300 underline"
                   >
-                    Remove duplicates
+                    {t('upload.removeDuplicates')}
                   </button>
                 </div>
               )}
@@ -125,7 +122,7 @@ export default function PhotoUpload() {
               disabled={processing || validCount === 0}
               className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
             >
-              {processing ? `Processing ${currentFile}...` : 'Identify Species'}
+              {processing ? `${t('upload.processing')} ${currentFile}...` : t('upload.identify')}
             </button>
           </div>
 
@@ -143,11 +140,8 @@ export default function PhotoUpload() {
                   className="w-16 h-16 object-cover rounded"
                 />
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm text-gray-300 truncate block">
-                    {filePath.split(/[\\/]/).pop()}
-                  </span>
                   {duplicate && (
-                    <span className="text-xs text-amber-400">Already identified</span>
+                    <span className="text-xs text-amber-400">{t('upload.alreadyIdentified')}</span>
                   )}
                 </div>
                 <button
@@ -164,13 +158,13 @@ export default function PhotoUpload() {
 
       {results.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-emerald-400">Results</h3>
+          <h3 className="text-lg font-semibold text-emerald-400">{t('upload.results')}</h3>
           {results.map((r) => (
-            <div key={r.id || r.filename} className="bg-gray-800 rounded-lg p-4 space-y-2">
+            <div key={r.id || r.species_name} className="bg-gray-800 rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-lg italic">{r.species_name}</p>
-                  <p className="text-sm text-gray-400">{r.filename}</p>
+                  <p className="font-semibold text-lg">{commonName(r.species_name)}</p>
+                  <p className="text-sm text-gray-400 italic">{r.scientific_name}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-emerald-400">
@@ -181,10 +175,10 @@ export default function PhotoUpload() {
               </div>
               {r.all_predictions && r.all_predictions.length > 1 && (
                 <div className="pt-2 border-t border-gray-700">
-                  <p className="text-xs text-gray-500 mb-1">Other predictions:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('upload.otherPredictions')}</p>
                   {r.all_predictions.slice(1).map((p, i) => (
                     <div key={i} className="flex justify-between text-xs text-gray-400">
-                      <span className="italic">{p.class}</span>
+                      <span>{commonName(p.class)}</span>
                       <span>{(p.confidence * 100).toFixed(1)}%</span>
                     </div>
                   ))}

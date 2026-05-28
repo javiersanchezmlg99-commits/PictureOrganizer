@@ -4,10 +4,12 @@ import {
   LineChart, Line, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import type { StatsData, SpeciesCount, TimelineEntry, CategoryCount } from '../shared/types';
+import { useI18n } from '../shared/i18n';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
 
 export default function Dashboard() {
+  const { t, commonName } = useI18n();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [topSpecies, setTopSpecies] = useState<SpeciesCount[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -19,7 +21,7 @@ export default function Dashboard() {
   }, []);
 
   const loadData = async () => {
-    const [s, sp, t, c] = await Promise.all([
+    const [s, sp, tl, c] = await Promise.all([
       window.electronAPI.getStats(),
       window.electronAPI.getTopSpecies(10),
       window.electronAPI.getTimeline(),
@@ -27,7 +29,7 @@ export default function Dashboard() {
     ]);
     setStats(s);
     setTopSpecies(sp);
-    setTimeline(t);
+    setTimeline(tl);
     setCategories(c);
   };
 
@@ -37,12 +39,23 @@ export default function Dashboard() {
     setExporting(false);
   };
 
+  // Map species names to common names for charts
+  const topSpeciesDisplay = topSpecies.map(s => ({
+    ...s,
+    display_name: commonName(s.species_name),
+  }));
+
+  const categoriesDisplay = categories.map(c => ({
+    ...c,
+    display_name: commonName(c.category),
+  }));
+
   const statCards = stats
     ? [
-        { label: 'Total Photos', value: stats.total_photos, icon: '📷' },
-        { label: 'Unique Species', value: stats.unique_species, icon: '🦁' },
-        { label: 'Avg Confidence', value: `${(stats.avg_confidence * 100).toFixed(0)}%`, icon: '🎯' },
-        { label: 'Photos Today', value: stats.photos_today, icon: '📅' },
+        { label: t('dash.totalPhotos'), value: stats.total_photos, icon: '📷' },
+        { label: t('dash.uniqueSpecies'), value: stats.unique_species, icon: '🦁' },
+        { label: t('dash.avgConfidence'), value: `${(stats.avg_confidence * 100).toFixed(0)}%`, icon: '🎯' },
+        { label: t('dash.today'), value: stats.photos_today, icon: '📅' },
       ]
     : [];
 
@@ -51,21 +64,20 @@ export default function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <h2 className="text-2xl font-bold">{t('dash.title')}</h2>
         <button
           onClick={handleExport}
           disabled={exporting || !hasData}
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
         >
-          {exporting ? 'Exporting...' : 'Export CSV'}
+          {exporting ? '...' : t('dash.exportCsv')}
         </button>
       </div>
 
       {!stats ? (
-        <p className="text-gray-400">Loading stats...</p>
+        <p className="text-gray-400">{t('id.loading')}</p>
       ) : (
         <>
-          {/* Stat Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {statCards.map((card) => (
               <div key={card.label} className="bg-gray-800 rounded-xl p-5 text-center">
@@ -79,24 +91,23 @@ export default function Dashboard() {
           {!hasData ? (
             <div className="flex flex-col items-center justify-center h-48 text-gray-500">
               <span className="text-4xl">📊</span>
-              <p className="mt-2">No data yet — upload and identify photos to see charts</p>
+              <p className="mt-2">{t('dash.noData')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top Species Bar Chart */}
-              {topSpecies.length > 0 && (
+              {topSpeciesDisplay.length > 0 && (
                 <div className="bg-gray-800 rounded-xl p-5">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-300">Top Species</h3>
+                  <h3 className="text-lg font-semibold mb-4 text-gray-300">{t('dash.topSpecies')}</h3>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={topSpecies} layout="vertical" margin={{ left: 20 }}>
+                    <BarChart data={topSpeciesDisplay} layout="vertical" margin={{ left: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis type="number" stroke="#9ca3af" />
                       <YAxis
                         type="category"
-                        dataKey="species_name"
-                        width={140}
+                        dataKey="display_name"
+                        width={160}
                         stroke="#9ca3af"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 11 }}
                       />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
@@ -108,22 +119,21 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Category Pie Chart */}
-              {categories.length > 0 && (
+              {categoriesDisplay.length > 0 && (
                 <div className="bg-gray-800 rounded-xl p-5">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-300">By Category</h3>
+                  <h3 className="text-lg font-semibold mb-4 text-gray-300">{t('dash.categories')}</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
-                        data={categories}
+                        data={categoriesDisplay}
                         dataKey="count"
-                        nameKey="category"
+                        nameKey="display_name"
                         cx="50%"
                         cy="50%"
                         outerRadius={100}
-                        label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}
+                        label={({ display_name, percent }) => `${display_name} ${(percent * 100).toFixed(0)}%`}
                       >
-                        {categories.map((_, i) => (
+                        {categoriesDisplay.map((_, i) => (
                           <Cell key={i} fill={COLORS[i % COLORS.length]} />
                         ))}
                       </Pie>
@@ -136,10 +146,9 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Timeline Line Chart */}
               {timeline.length > 0 && (
                 <div className="bg-gray-800 rounded-xl p-5 lg:col-span-2">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-300">Photos Over Time</h3>
+                  <h3 className="text-lg font-semibold mb-4 text-gray-300">{t('dash.timeline')}</h3>
                   <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={timeline}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
