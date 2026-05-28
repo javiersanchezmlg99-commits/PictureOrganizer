@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Photo, PhotoFilter } from '../shared/types';
-import { localFileUrl } from '../shared/utils';
+import ThumbnailImage from './ThumbnailImage';
 
 const CATEGORIES = ['All', 'Mammal', 'Bird', 'Reptile', 'Amphibian', 'Fish', 'Insect'];
 
@@ -92,14 +92,11 @@ export default function History() {
           <div className="space-y-3">
             {photos.map((photo) => (
               <div key={photo.id} className="bg-gray-800 rounded-lg p-4 flex items-center gap-4">
-                <img
-                  src={localFileUrl(photo.file_path)}
+                <ThumbnailImage
+                  photoId={photo.id}
+                  originalPath={photo.file_path}
                   alt={photo.filename}
                   className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '';
-                    (e.target as HTMLImageElement).className = 'w-20 h-20 rounded-lg bg-gray-700 flex-shrink-0';
-                  }}
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{photo.species_name ?? 'Unknown'}</p>

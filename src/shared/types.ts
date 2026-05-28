@@ -70,4 +70,5 @@ export interface ElectronAPI {
   getTimeline: () => Promise<TimelineEntry[]>;
   getCategoryDistribution: () => Promise<CategoryCount[]>;
   exportCsv: () => Promise<string>;
+  getThumbnail: (photoId: string, originalPath: string) => Promise<string>;
 }

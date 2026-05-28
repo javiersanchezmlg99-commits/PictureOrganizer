@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTimeline: () => ipcRenderer.invoke('photos:timeline'),
   getCategoryDistribution: () => ipcRenderer.invoke('photos:categoryDistribution'),
   exportCsv: () => ipcRenderer.invoke('photos:exportCsv'),
+  getThumbnail: (photoId: string, originalPath: string) => ipcRenderer.invoke('photos:thumbnail', photoId, originalPath),
 });

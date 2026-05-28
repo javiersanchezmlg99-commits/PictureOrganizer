@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as db from './database';
+import { generateThumbnail, deleteThumbnail, getThumbPath } from './thumbnails';
 import type { IdentificationResult, PhotoFilter } from './shared/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -24,6 +25,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('photos:getOne', (_event, id: string) => db.getPhotoById(id));
 
   ipcMain.handle('photos:delete', (_event, id: string) => {
+    deleteThumbnail(id);
     db.deletePhoto(id);
   });
 
@@ -31,6 +33,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('photos:topSpecies', (_event, limit?: number) => db.getTopSpecies(limit));
   ipcMain.handle('photos:timeline', () => db.getTimeline());
   ipcMain.handle('photos:categoryDistribution', () => db.getCategoryDistribution());
+
+  // Get thumbnail path for a photo (returns cached thumb or original path)
+  ipcMain.handle('photos:thumbnail', (_event, photoId: string, originalPath: string) => {
+    return getThumbPath(photoId) ?? originalPath;
+  });
 
   ipcMain.handle('photos:exportCsv', async () => {
     const csv = db.exportToCsv();
@@ -57,9 +64,10 @@ export function registerIpcHandlers(): void {
     const filename = path.basename(filePath);
     const species = MOCK_SPECIES[Math.floor(Math.random() * MOCK_SPECIES.length)];
     const confidence = 0.75 + Math.random() * 0.24;
+    const id = uuidv4();
 
     const mockResult: IdentificationResult = {
-      id: uuidv4(),
+      id,
       filename,
       species_name: species.name,
       scientific_name: species.scientific,
@@ -83,6 +91,13 @@ export function registerIpcHandlers(): void {
       inference_time_ms: mockResult.inference_time_ms,
       all_predictions: mockResult.all_predictions,
     });
+
+    // Generate thumbnail in background (non-blocking for UI)
+    try {
+      generateThumbnail(id, filePath);
+    } catch (err) {
+      console.warn('[identify] Thumbnail generation failed:', err);
+    }
 
     return mockResult;
   });

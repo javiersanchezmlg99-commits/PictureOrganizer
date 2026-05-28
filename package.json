@@ -1,8 +1,8 @@
 {
-  "name": "photoproject",
-  "productName": "photoproject",
+  "name": "fauna-id",
+  "productName": "FAUNA ID",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Offline wildlife species identification using local AI",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {

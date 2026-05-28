@@ -5,6 +5,7 @@ import started from 'electron-squirrel-startup';
 import { initDatabase } from './database';
 import { registerIpcHandlers } from './ipc-handlers';
 import { startApiServer } from './api';
+import { initThumbnails } from './thumbnails';
 
 if (started) {
   app.quit();
@@ -65,9 +66,14 @@ app.on('ready', async () => {
     return net.fetch(fileUrl);
   });
 
-  await initDatabase();
-  registerIpcHandlers();
-  startApiServer(3001);
+  try {
+    await initDatabase();
+    initThumbnails();
+    registerIpcHandlers();
+    startApiServer(3001);
+  } catch (err) {
+    console.error('[FAUNA ID] Fatal startup error:', err);
+  }
   createWindow();
 });
 
