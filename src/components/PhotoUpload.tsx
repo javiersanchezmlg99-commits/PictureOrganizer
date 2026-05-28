@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { IdentificationResult } from '../shared/types';
+import { localFileUrl } from '../shared/utils';
 
 export default function PhotoUpload() {
   const [dragOver, setDragOver] = useState(false);
@@ -95,7 +96,7 @@ export default function PhotoUpload() {
                 className="bg-gray-800 rounded-lg p-3 flex items-center gap-3"
               >
                 <img
-                  src={`file://${filePath}`}
+                  src={localFileUrl(filePath)}
                   alt=""
                   className="w-16 h-16 object-cover rounded"
                 />
